@@ -1,0 +1,45 @@
+# Adapt the app, version, paths and locale groups for your own release.
+# Referenced files are relative to this manifest. Capture a fresh snapshot first.
+app: com.example.app
+profile: default
+bundle: app-release.aab
+versionCode: 123
+name: "1.2.3"
+track: internal
+status: draft
+# For a staged production release: track: production, status: inProgress, rollout: 10.
+requiredLocales: [en-US, es-ES]
+requiredImageTypes: [phoneScreenshots]
+notes:
+  - language: en-US
+    text: "Bug fixes and improvements."
+  - language: es-ES
+    text: "Correcciones de errores y mejoras."
+# Optional listing patches; omitted fields are preserved.
+# New locales need complete title, shortDescription and fullDescription fields.
+listings: []
+# Complete final screenshot sets in display order. Use your original image files.
+# For positional replacement with sourceFiles/replace, see ../atomic-releases.md.
+images:
+  - locale: en-US
+    type: phoneScreenshots
+    mode: replace
+    files:
+      - assets/en-US/phone-01.png
+      - assets/en-US/phone-02.png
+  - locale: es-ES
+    type: phoneScreenshots
+    mode: replace
+    files:
+      - assets/es-ES/phone-01.png
+      - assets/es-ES/phone-02.png
+# Optional: add a featureGraphic group with files: [assets/en-US/feature.png].
+symbols: []
+replaceExisting: false
+review:
+  inReview: error
+  changesNotSentForReview: false
+# Enable required deep checks after configuring local Android tools and a trusted
+# uploadCertificateSha256. Missing optional checks are reported as not_run.
+preflight:
+  required: false

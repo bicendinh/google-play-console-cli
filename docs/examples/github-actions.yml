@@ -1,0 +1,45 @@
+# Example for an ANDROID APP repository, not this CLI repository.
+# Replace YOUR_CLI_OWNER/google-play-console-cli and PINNED_COMMIT before use.
+# The build job must produce a SIGNED AAB artifact named android-release.
+name: Upload Google Play draft
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    environment: google-play-internal
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: YOUR_CLI_OWNER/google-play-console-cli
+          ref: PINNED_COMMIT
+          path: playops-source
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: playops-source/go.mod
+      - name: Build pinned CLI
+        working-directory: playops-source
+        run: go build -trimpath -o ../playops ./cmd/playops
+      # In your complete workflow, use needs: build and remove run-id/token when
+      # downloading from the same run. These inputs select an existing build run.
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: release
+          run-id: ${{ vars.SIGNED_BUILD_RUN_ID }}
+          github-token: ${{ github.token }}
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+      - name: Upload internal draft only
+        env:
+          PLAY_PACKAGE: ${{ vars.PLAY_PACKAGE }}
+        run: >-
+          ./playops releases upload --app "$PLAY_PACKAGE" --track internal
+          --file release/app-release.aab --confirm

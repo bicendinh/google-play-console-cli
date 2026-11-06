@@ -1,0 +1,7 @@
+/bin/
+/dist/
+/coverage.out
+*.test
+.DS_Store
+service-account*.json
+credentials*.json

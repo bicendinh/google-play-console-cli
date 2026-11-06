@@ -1,0 +1,32 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -race ./...
+      - run: go vet ./...
+      - run: go mod verify
+      - name: Build release archives
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: python3 scripts/release.py "$RELEASE_VERSION"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: >-
+          gh release create "$RELEASE_VERSION" --verify-tag --generate-notes
+          "dist/$RELEASE_VERSION/"*.tar.gz "dist/$RELEASE_VERSION/"*.zip
+          "dist/$RELEASE_VERSION/SHA256SUMS"

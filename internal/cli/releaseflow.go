@@ -1,0 +1,206 @@
+package cli
+
+import (
+	"context"
+	"slices"
+	"strings"
+
+	"github.com/spf13/cobra"
+	pub "google.golang.org/api/androidpublisher/v3"
+	"playops/internal/fault"
+	"playops/internal/model"
+	"playops/internal/releaseflow"
+)
+
+func (a *App) workflowIdentity(m releaseflow.Manifest) error {
+	if m.Profile != a.profile {
+		return fault.Input("Select manifest profile explicitly with --profile %s", m.Profile)
+	}
+	if a.app != "" && a.app != m.App {
+		return fault.Input("--app differs from the reviewed manifest app")
+	}
+	return nil
+}
+func required(c *cobra.Command, names ...string) {
+	for _, name := range names {
+		_ = c.MarkFlagRequired(name)
+	}
+}
+func (a *App) releaseSnapshot() *cobra.Command {
+	var path, out string
+	var confirm bool
+	c := &cobra.Command{Use: "snapshot", Short: "Capture track/listing/image state through one discarded edit", Args: exact(0)}
+	c.Flags().StringVar(&path, "manifest", "", "Release YAML/JSON manifest")
+	c.Flags().StringVar(&out, "out", "", "New snapshot JSON path")
+	c.Flags().BoolVar(&confirm, "confirm", false, "Consent to a temporary edit; this can invalidate an existing edit by the same identity")
+	required(c, "manifest", "out")
+	c.RunE = a.run(func(ctx context.Context, _ *cobra.Command, _ []string) (model.Result, error) {
+		if !confirm {
+			return model.Result{}, fault.Input("snapshot opens a temporary edit and requires --confirm")
+		}
+		if err := releaseflow.CheckOutput(out); err != nil {
+			return model.Result{}, err
+		}
+		m, err := releaseflow.LoadManifest(path, a.profile)
+		if err != nil {
+			return model.Result{}, err
+		}
+		if err = a.workflowIdentity(m); err != nil {
+			return model.Result{}, err
+		}
+		client, _, err := a.client(ctx, false)
+		if err != nil {
+			return model.Result{}, err
+		}
+		unlock, err := a.lock(m.App)
+		if err != nil {
+			return model.Result{}, err
+		}
+		defer unlock()
+		snapshot, err := (releaseflow.Service{API: client, Now: a.Now}).Capture(ctx, m)
+		if err != nil {
+			return model.Result{}, err
+		}
+		if err = releaseflow.Write(out, snapshot); err != nil {
+			return model.Result{}, err
+		}
+		return model.Result{Data: snapshot, Meta: map[string]any{"source": "android-publisher", "out": out, "committed": false}}, nil
+	})
+	return c
+}
+func (a *App) releasePlan() *cobra.Command {
+	var manifest, snapshot, out string
+	var dry bool
+	c := &cobra.Command{Use: "plan", Short: "Create an offline, hashed plan from local files and a saved snapshot", Args: exact(0)}
+	c.Flags().StringVar(&manifest, "manifest", "", "Release YAML/JSON manifest")
+	c.Flags().StringVar(&snapshot, "snapshot", "", "Previously captured snapshot JSON")
+	c.Flags().StringVar(&out, "out", "", "New reviewed plan JSON path")
+	c.Flags().BoolVar(&dry, "dry-run", true, "Offline preview only; this command never calls Google")
+	required(c, "manifest", "snapshot", "out")
+	c.RunE = a.run(func(ctx context.Context, _ *cobra.Command, _ []string) (model.Result, error) {
+		if !dry {
+			return model.Result{}, fault.Input("plan is always offline; use apply for Google writes")
+		}
+		p, err := releaseflow.BuildPlan(ctx, manifest, snapshot, a.profile)
+		if err != nil {
+			return model.Result{}, err
+		}
+		if err = a.workflowIdentity(p.Manifest); err != nil {
+			return model.Result{}, err
+		}
+		if err = releaseflow.Write(out, p); err != nil {
+			return model.Result{}, err
+		}
+		return model.Result{Data: p, Meta: map[string]any{"source": "local-preview", "out": out, "dryRun": true, "serverValidated": false}}, nil
+	})
+	return c
+}
+func (a *App) releaseApply() *cobra.Command {
+	var path string
+	var confirm, dry bool
+	c := &cobra.Command{Use: "apply", Short: "Apply an unchanged reviewed plan in one validated, committed edit", Args: exact(0)}
+	c.Flags().StringVar(&path, "plan", "", "Reviewed plan JSON")
+	c.Flags().BoolVar(&confirm, "confirm", false, "Authorize exactly the changes and review behavior in the plan")
+	c.Flags().BoolVar(&dry, "dry-run", false, "Verify local plan inputs without contacting Google")
+	required(c, "plan")
+	c.RunE = a.run(func(ctx context.Context, _ *cobra.Command, _ []string) (model.Result, error) {
+		if !dry && !confirm {
+			return model.Result{}, fault.Input("apply requires --confirm or --dry-run")
+		}
+		p, err := releaseflow.LoadPlan(path)
+		if err != nil {
+			return model.Result{}, err
+		}
+		if err = a.workflowIdentity(p.Manifest); err != nil {
+			return model.Result{}, err
+		}
+		if err = releaseflow.VerifyInputs(p); err != nil {
+			return model.Result{}, err
+		}
+		if dry {
+			return model.Result{Data: p, Meta: map[string]any{"source": "local-preview", "serverValidated": false, "dryRun": true}}, nil
+		}
+		client, _, err := a.client(ctx, false)
+		if err != nil {
+			return model.Result{}, err
+		}
+		unlock, err := a.lock(p.Manifest.App)
+		if err != nil {
+			return model.Result{}, err
+		}
+		defer unlock()
+		out, err := (releaseflow.Service{API: client, Now: a.Now}).Apply(ctx, p)
+		return model.Result{Data: out, Meta: map[string]any{"source": "android-publisher", "app": p.Manifest.App, "track": p.Manifest.Track, "notice": "Commit acceptance is not proof of review approval or publication"}}, err
+	})
+	return c
+}
+func (a *App) releasePreflight() *cobra.Command {
+	var path, snapshot string
+	c := &cobra.Command{Use: "preflight", Short: "Check local bundle metadata/signature and optional snapshot coverage", Args: exact(0)}
+	c.Flags().StringVar(&path, "manifest", "", "Release YAML/JSON manifest")
+	c.Flags().StringVar(&snapshot, "snapshot", "", "Saved snapshot for full asset coverage and diff checks")
+	required(c, "manifest")
+	c.RunE = a.run(func(ctx context.Context, _ *cobra.Command, _ []string) (model.Result, error) {
+		m, err := releaseflow.LoadManifest(path, a.profile)
+		if err != nil {
+			return model.Result{}, err
+		}
+		if err = a.workflowIdentity(m); err != nil {
+			return model.Result{}, err
+		}
+		if snapshot != "" {
+			p, e := releaseflow.BuildPlan(ctx, path, snapshot, a.profile)
+			return model.Result{Data: map[string]any{"checks": p.Preflight, "diff": p.Diff}, Meta: map[string]any{"source": "local-preflight", "serverValidated": false}}, e
+		}
+		if m.Preflight.Required {
+			return model.Result{}, fault.Input("Strict preflight requires --snapshot to verify listing/image coverage")
+		}
+		for _, group := range m.Images {
+			for _, file := range append(append(append([]string{}, group.Files...), group.SourceFiles...), mapValues(group.Replace)...) {
+				if err = releaseflow.ValidateImage(file, group.Type); err != nil {
+					return model.Result{}, err
+				}
+			}
+		}
+		checks, err := releaseflow.Preflight(ctx, m)
+		checks = append(checks, releaseflow.Check{Name: "snapshotCoverage", Status: "not_run", Message: "No snapshot supplied; current listing/image coverage and source hash equality were not verified"})
+		return model.Result{Data: checks, Meta: map[string]any{"source": "local-preflight", "serverValidated": false}}, err
+	})
+	return c
+}
+func mapValues(m map[int]string) []string {
+	values := []string{}
+	for _, v := range m {
+		values = append(values, v)
+	}
+	return values
+}
+func (a *App) releaseStatus() *cobra.Command {
+	var track string
+	var version int64
+	c := &cobra.Command{Use: "status", Short: "Find a version's review lifecycle without creating an edit", Args: exact(0)}
+	c.Flags().StringVar(&track, "track", "", "Track identifier")
+	c.Flags().Int64Var(&version, "version-code", 0, "Positive version code to find")
+	required(c, "track", "version-code")
+	c.RunE = a.run(func(ctx context.Context, _ *cobra.Command, _ []string) (model.Result, error) {
+		if version <= 0 || strings.ContainsAny(track, "/\\ \n\r\t") || track == "" {
+			return model.Result{}, fault.Input("Provide a track and positive version code")
+		}
+		client, p, err := a.client(ctx, true)
+		if err != nil {
+			return model.Result{}, err
+		}
+		rows, err := client.Releases(ctx, p.App, track)
+		if err != nil {
+			return model.Result{}, err
+		}
+		matches := []*pub.ReleaseSummary{}
+		for _, r := range rows {
+			if slices.ContainsFunc(r.ActiveArtifacts, func(a *pub.ArtifactSummary) bool { return a.VersionCode == version }) {
+				matches = append(matches, r)
+			}
+		}
+		return model.Result{Data: map[string]any{"found": len(matches) > 0, "releases": matches}, Meta: map[string]any{"source": "android-publisher", "app": p.App, "track": track, "notice": "At most 20 non-obsolete releases are returned. Absence does not prove commit failure. This endpoint has no rollout fraction."}}, nil
+	})
+	return c
+}

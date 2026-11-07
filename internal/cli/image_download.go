@@ -77,7 +77,7 @@ func (a *App) listingImagesDownload() *cobra.Command {
 			f.Details = map[string]any{"inspection": receipt, "cause": f.Details}
 			return model.Result{}, f
 		}
-		return model.Result{Data: map[string]any{"locale": locale, "type": kind, "files": files, "originalBytesVerified": true}, Meta: map[string]any{"source": "google-play-image-preview", "editOpened": receipt.EditOpened, "editId": receipt.EditID, "discarded": receipt.Discarded, "committed": false, "notice": "All downloaded bytes match snapshot SHA-256. Preview availability is not guaranteed; no URL variants or image conversions are attempted."}}, nil
+		return model.Result{Data: map[string]any{"locale": locale, "type": kind, "files": files, "originalBytesVerified": true}, Meta: map[string]any{"source": "google-play-image-preview", "editOpened": receipt.EditOpened, "editId": receipt.EditID, "discarded": receipt.Discarded, "committed": false, "notice": "All downloaded bytes match snapshot SHA-256. Preview and original-size URL candidates are hash-verified; availability is not guaranteed. No image conversion is performed."}}, nil
 	})
 	return c
 }

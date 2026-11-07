@@ -131,7 +131,14 @@ Use `sourceFiles`/`replace` when keeping other slots unchanged.
 To recover missing original images, use `listings images download --snapshot
 snapshot.json --locale en-US --type phoneScreenshots --out originals/en-US
 --confirm`, with an existing parent directory and a fresh output directory.
-Every file must match the snapshot SHA-256. A preview hash mismatch is
-`IMAGE_ORIGINAL_UNAVAILABLE`; request saved originals instead of bypassing it.
+Every file must match the snapshot SHA-256. The CLI also tries a hash-verified `=s0` original-size candidate. If neither
+preview nor candidate matches, it returns `IMAGE_ORIGINAL_UNAVAILABLE`; request
+saved originals instead of bypassing verification.
 Review `editOpened`/`discarded`/`editId` in snapshot and image inspection results.
 Temporary edits are API mutations, even when no content is uploaded or committed.
+
+Snapshot-matching originals must retain their hashes. Only new content is
+normalized; an unchanged final image set is a no-op and is omitted from mutations.
+Physical upload count may exceed the number of changed content positions because
+sync preserves ordering by replacing the whole group. Inspect content/hash diffs,
+not image IDs, to assess intended image changes.

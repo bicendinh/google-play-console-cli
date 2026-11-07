@@ -90,29 +90,11 @@ func DownloadImages(ctx context.Context, expected []Image, rows []*pub.Image, ou
 	}}
 	files := []File{}
 	for i, row := range rows {
-		req, e := http.NewRequestWithContext(ctx, http.MethodGet, row.Url, nil)
+		data, e := fetchOriginal(ctx, client, row.Url, expected[i].SHA256, i+1)
 		if e != nil {
-			return nil, fault.Input("Invalid image request")
-		}
-		response, e := client.Do(req)
-		if e != nil {
-			if ctx.Err() != nil {
-				return nil, fault.From(ctx.Err())
-			}
-			return nil, fault.New("IMAGE_DOWNLOAD_FAILED", "Cannot fetch preview image; original bytes have not been recovered", 5)
-		}
-		const limit = 32 << 20
-		data, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
-		response.Body.Close()
-		if response.StatusCode != http.StatusOK || readErr != nil || len(data) > limit {
-			return nil, fault.New("IMAGE_DOWNLOAD_FAILED", "Image download failed or exceeds 32 MiB; no original accepted", 5)
-		}
-		h := sha256.Sum256(data)
-		if !strings.EqualFold(hex.EncodeToString(h[:]), expected[i].SHA256) {
-			e := fault.New("IMAGE_ORIGINAL_UNAVAILABLE", "Preview bytes do not match the snapshot SHA-256; supply your saved original assets", 4)
-			e.Details = map[string]any{"position": i + 1, "expectedSha256": expected[i].SHA256, "actualSha256": hex.EncodeToString(h[:])}
 			return nil, e
 		}
+		h := sha256.Sum256(data)
 		_, format, e := image.DecodeConfig(bytes.NewReader(data))
 		if e != nil || (format != "png" && format != "jpeg") {
 			return nil, fault.Input("Verified image %d is not a supported PNG/JPEG", i+1)
@@ -149,4 +131,67 @@ func DownloadImages(ctx context.Context, expected []Image, rows []*pub.Image, ou
 	}
 	success = true
 	return files, nil
+}
+
+// Google image transformations are best-effort candidates, never trusted as
+// originals without a snapshot digest match. Preserve the URL's query string.
+func originalCandidates(raw string) []string {
+	result := []string{raw}
+	u, e := url.Parse(raw)
+	if e != nil {
+		return result
+	}
+	if i := strings.LastIndex(u.Path, "="); i >= 0 {
+		u.Path = u.Path[:i]
+	}
+	u.Path += "=s0"
+	u.RawPath = ""
+	candidate := u.String()
+	if candidate != raw {
+		result = append(result, candidate)
+	}
+	return result
+}
+func fetchOriginal(ctx context.Context, client *http.Client, raw, want string, position int) ([]byte, error) {
+	actual := ""
+	attempts := 0
+	retrieved := false
+	for _, candidate := range originalCandidates(raw) {
+		if e := imageURL(candidate); e != nil {
+			return nil, e
+		}
+		req, e := http.NewRequestWithContext(ctx, http.MethodGet, candidate, nil)
+		if e != nil {
+			return nil, fault.Input("Invalid image request")
+		}
+		attempts++
+		response, e := client.Do(req)
+		if e != nil {
+			if ctx.Err() != nil {
+				return nil, fault.From(ctx.Err())
+			}
+			continue
+		}
+		const limit = 32 << 20
+		data, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
+		response.Body.Close()
+		if ctx.Err() != nil {
+			return nil, fault.From(ctx.Err())
+		}
+		if response.StatusCode != http.StatusOK || readErr != nil || len(data) > limit {
+			continue
+		}
+		retrieved = true
+		h := sha256.Sum256(data)
+		actual = hex.EncodeToString(h[:])
+		if strings.EqualFold(actual, want) {
+			return data, nil
+		}
+	}
+	if !retrieved {
+		return nil, fault.New("IMAGE_DOWNLOAD_FAILED", "Image retrieval failed or exceeded 32 MiB for all candidates", 5)
+	}
+	e := fault.New("IMAGE_ORIGINAL_UNAVAILABLE", "Neither preview nor original-size candidate matches snapshot SHA-256; supply your saved originals", 4)
+	e.Details = map[string]any{"position": position, "expectedSha256": want, "actualSha256": actual, "attempts": attempts}
+	return nil, e
 }

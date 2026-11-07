@@ -283,19 +283,26 @@ func prepare(ctx context.Context, m Manifest, baseline Snapshot, inputs map[stri
 			p.Warnings = append(p.Warnings, Issue{Field: "images.files", Locale: change.Locale, Message: fmt.Sprintf("Explicitly approved image count decrease for %s: %d -> %d", group, len(before), len(files))})
 		}
 		target := PlannedImages{Locale: change.Locale, Type: change.Type, Files: []File{}}
-		for _, path := range files {
-			_, e := add(path)
+		for i, path := range files {
+			f, e := add(path)
 			if e != nil {
 				return p, e
 			}
-			f, e := ImageFile(path, change.Type, m.FlattenAlpha)
-			if e != nil {
-				return p, e
+			// Snapshot-verified bytes already on Play retain their identity. Only
+			// actual new content needs PNG normalization, including explicit replacements.
+			if i >= len(before) || !strings.EqualFold(f.SHA256, before[i].SHA256) {
+				f, e = ImageFile(path, change.Type, m.FlattenAlpha)
+				if e != nil {
+					return p, e
+				}
 			}
 			target.Files = append(target.Files, f)
 		}
-		p.TargetImages = append(p.TargetImages, target)
 		plannedCounts[group] = len(files)
+		if checkImages(before, target) == nil {
+			continue
+		}
+		p.TargetImages = append(p.TargetImages, target)
 		p.Diff = append(p.Diff, Diff{Resource: "images/" + group, Before: before, After: target.Files})
 	}
 	for _, locale := range m.RequiredLocales {

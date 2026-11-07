@@ -64,3 +64,9 @@ Review-v3 regressions cover filename warnings, blocked image-count reduction,
 explicit per-group consent (including copyFrom destination isolation), one note
 issue for 501 Unicode characters and acceptance at 500, and expected/actual
 values for all configured AAB metadata fields.
+
+Original-image regressions cover compressed previews falling back to exact-byte
+original-size downloads, preserved URL queries and hash rejection across all
+candidates. Baseline RGBA originals keep their hashes, identical replacements
+produce no image mutations, and one source can be staged both unchanged and
+normalized for separate locales without mixing upload payloads.

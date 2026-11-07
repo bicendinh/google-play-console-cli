@@ -134,6 +134,9 @@ func (a *App) releaseApply() *cobra.Command {
 		if dry {
 			return model.Result{Data: p, Meta: map[string]any{"source": "local-preview", "serverValidated": false, "dryRun": true}}, nil
 		}
+		if len(p.Diff) == 0 && len(p.Manifest.Symbols) == 0 {
+			return model.Result{}, fault.Input("Plan contains no changes; no edit is needed")
+		}
 		client, _, err := a.client(ctx, false)
 		if err != nil {
 			return model.Result{}, err

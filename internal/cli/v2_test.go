@@ -41,6 +41,29 @@ func localPlan(t *testing.T) (string, string) {
 	}
 	return manifest, plan
 }
+
+func TestNoOpApplyDoesNotCreateGoogleClient(t *testing.T) {
+	manifest, _ := localPlan(t)
+	b, e := os.ReadFile(manifest)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(manifest, []byte(strings.ReplaceAll(string(b), "Updated", "Before")), 0600); e != nil {
+		t.Fatal(e)
+	}
+	p, e := releaseflow.BuildPlan(context.Background(), manifest, filepath.Join(filepath.Dir(manifest), "snapshot.json"), "default")
+	if e != nil {
+		t.Fatal(e)
+	}
+	out := filepath.Join(filepath.Dir(manifest), "noop.json")
+	if e = releaseflow.Write(out, p); e != nil {
+		t.Fatal(e)
+	}
+	code, env, _ := invoke(t, filepath.Join(t.TempDir(), "config.json"), offline(t), "releases", "apply", "--plan", out, "--confirm")
+	if code != 2 || env.Error == nil || !strings.Contains(env.Error.Message, "no changes") {
+		t.Fatalf("wrong no-op result %+v", env)
+	}
+}
 func TestLifecycleOnlyCommandsNeverOpenEdits(t *testing.T) {
 	manifest, plan := localPlan(t)
 	cfg := filepath.Join(t.TempDir(), "config.json")

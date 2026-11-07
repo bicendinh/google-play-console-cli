@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.3
+
+- Try an original-size Google image URL candidate when preview bytes do not match
+  the snapshot, retaining exact digest and host/redirect checks.
+- Preserve snapshot-matching image bytes instead of normalizing them again, skip
+  unchanged image groups, and stage raw/converted locale payloads independently.
+
 ## v0.3.2
 
 - Report edit IDs and acknowledged cleanup for snapshot and image inspection.

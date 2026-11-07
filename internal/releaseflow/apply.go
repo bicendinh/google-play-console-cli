@@ -197,7 +197,7 @@ func (s Service) SyncImages(ctx context.Context, app, edit string, group Planned
 		return err
 	}
 	for _, file := range group.Files {
-		f, e := open(file.Path)
+		f, e := open(imageUploadKey(file))
 		if e != nil {
 			return e
 		}

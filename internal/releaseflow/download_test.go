@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	pub "google.golang.org/api/androidpublisher/v3"
@@ -35,7 +36,7 @@ func TestDownloadsRequireExactOriginalBytes(t *testing.T) {
 			t.Error("credentials leaked")
 		}
 		body := data
-		if bad && calls%2 == 0 {
+		if bad && r.URL.Path != "/one" && r.URL.Path != "/one=s0" {
 			body = []byte("different preview")
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(body)), Header: http.Header{}}, nil
@@ -71,5 +72,31 @@ func TestDownloadsRequireExactOriginalBytes(t *testing.T) {
 		if imageURL(url) == nil {
 			t.Fatalf("unsafe URL accepted %s", url)
 		}
+	}
+}
+
+func TestDownloadFallsBackToOriginalSizeWithExactHash(t *testing.T) {
+	dir := t.TempDir()
+	path := testutil.RGBAFile(t, filepath.Join(dir, "source.png"), 255)
+	data, _ := os.ReadFile(path)
+	sum := sha256.Sum256(data)
+	hash := hex.EncodeToString(sum[:])
+	calls := 0
+	transport := assetTransport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		body := []byte("compressed preview")
+		if strings.HasSuffix(r.URL.Path, "=s0") {
+			body = data
+		}
+		if r.URL.RawQuery != "token=example" || r.Header.Get("Authorization") != "" {
+			t.Fatal("query changed or credentials sent")
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(body)), Header: http.Header{}}, nil
+	})
+	expected := []Image{{SHA256: hash}}
+	rows := []*pub.Image{{Sha256: hash, Url: "https://play-lh.googleusercontent.com/image=w400?token=example"}}
+	files, e := DownloadImages(context.Background(), expected, rows, filepath.Join(dir, "originals"), transport)
+	if e != nil || len(files) != 1 || calls != 2 {
+		t.Fatalf("fallback failed %+v %v calls=%d", files, e, calls)
 	}
 }

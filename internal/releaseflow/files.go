@@ -195,13 +195,10 @@ func stage(p Plan) (map[string]string, func(), error) {
 	transforms := map[string]File{}
 	for _, group := range p.TargetImages {
 		for _, file := range group.Files {
-			if before, ok := transforms[file.Path]; ok && (before.SHA256 != file.SHA256 || before.Transform != file.Transform) {
-				cleanup()
-				return nil, nil, fault.Input("One image source has conflicting upload transformations: %s", file.Path)
-			}
-			transforms[file.Path] = file
+			transforms[imageUploadKey(file)] = file
 		}
 	}
+
 	for path, expected := range transforms {
 		if expected.Transform == "" {
 			continue
@@ -210,7 +207,7 @@ func stage(p Plan) (map[string]string, func(), error) {
 			cleanup()
 			return nil, nil, fault.Input("Unsupported image transformation")
 		}
-		input, ok := staged[path]
+		input, ok := staged[expected.Path]
 		if !ok {
 			cleanup()
 			return nil, nil, fault.Input("Transformed image is not a plan input")
@@ -225,7 +222,7 @@ func stage(p Plan) (map[string]string, func(), error) {
 		kind := ""
 		for _, g := range p.TargetImages {
 			for _, f := range g.Files {
-				if f.Path == path {
+				if f.Path == expected.Path && f.SHA256 == expected.SHA256 {
 					kind = g.Type
 				}
 			}
@@ -240,7 +237,7 @@ func stage(p Plan) (map[string]string, func(), error) {
 			cleanup()
 			return nil, nil, fault.Conflict("Converted image differs from reviewed output hash; regenerate the plan")
 		}
-		output := input + ".rgb.png"
+		output := input + "." + expected.SHA256 + ".rgb.png"
 		if e = os.WriteFile(output, data, 0600); e != nil {
 			cleanup()
 			return nil, nil, e
@@ -248,4 +245,13 @@ func stage(p Plan) (map[string]string, func(), error) {
 		staged[path] = output
 	}
 	return staged, cleanup, nil
+}
+
+// Transformed payloads get a separate staging key, allowing the same original
+// file to remain unchanged in one locale and be normalized for another.
+func imageUploadKey(f File) string {
+	if f.Transform == "" {
+		return f.Path
+	}
+	return "\x00image:" + f.Path + "\x00" + f.SHA256
 }

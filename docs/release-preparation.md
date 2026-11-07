@@ -56,7 +56,7 @@ preview URLs are never used to reconstruct missing original assets.
 `flattenAlpha: auto` is the manifest default. Preflight and planning accept an
 8-bit PNG that is fully opaque, including an RGBA file whose alpha values are all
 255. A PNG requiring normalization is converted to 24-bit RGB for upload.
-Images with transparent pixels fail; no background color is invented. Icons
+New images with transparent pixels fail; no background color is invented. Icons
 retain their separate PNG/alpha rules.
 
 `releases plan`, `releases preflight` and `listings images plan` accept
@@ -67,7 +67,11 @@ The policy is stored in the plan; sync/apply cannot silently override it.
 Original files are never overwritten. Plan image files contain the upload
 `sha256`/`size` and, when converted, `sourceSha256`, `sourceSize` and
 `transform: opaque-png-rgb-v1`. Apply stages verified original bytes and
-reproduces the conversion before opening an edit. A changed source or different
+reproduces the conversion before opening an edit. Snapshot-matching bytes at
+their existing position are preserved rather than normalized, including opaque
+RGBA originals. Only actual new content is normalized. If the final ordered
+hashes match the snapshot, the image group is omitted from mutations and the
+diff. An image-only no-op plan does not open an edit. A changed source or different
 converted hash stops the operation. Original and converted hashes serve
 different purposes and are never substituted for each other.
 
@@ -236,8 +240,11 @@ The output directory must not exist and its parent must exist. Files are named
 
 Each downloaded file must match the snapshot SHA-256 exactly. Preview URLs do
 not guarantee original bytes: `IMAGE_ORIGINAL_UNAVAILABLE` (exit 4) means the
-preview differs and your saved originals are still needed. The CLI does not
-modify URL variants, resize images, re-encode bytes or accept a near match.
+preview differs and your saved originals are still needed. The CLI first tries the API preview URL, then an original-size `=s0` URL
+candidate if needed. This URL behavior is not guaranteed by the Publisher API;
+every candidate must still match the snapshot SHA-256. Query strings are retained,
+and host/redirect/size limits apply to both requests. The CLI never resizes,
+re-encodes or accepts a near match.
 No partial output directory is left on failure. Inheritance cannot be downloaded
 from an empty image group. Downloads are bounded at 32 MiB per image and use
 anonymous HTTPS requests on Google image hosts, including redirect checks; API
@@ -250,3 +257,10 @@ caller retains ownership. Inspection errors retain cleanup evidence in details.
 Creating and discarding an edit is an API mutation, even though no release
 content is uploaded or committed. It can invalidate another edit by the same
 identity. No-edit commands do not create or discard an edit.
+
+A real image change can still require uploading the full ordered set with the
+current sync implementation. Unchanged originals retain their exact bytes and
+hashes during that operation; image IDs may change. The CLI does not claim an
+in-place positional update API. Copying a set into a new locale may normalize
+bytes that already exist in the source locale; raw and converted payloads are
+staged separately so each destination receives its reviewed hashes.

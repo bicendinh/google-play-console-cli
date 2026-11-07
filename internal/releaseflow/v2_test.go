@@ -30,12 +30,12 @@ func TestOpaqueRGBAPlanAndStaging(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer cleanup()
-	actual, e := HashFile(staged[path])
+	actual, e := HashFile(staged[imageUploadKey(f)])
 	if e != nil || actual.SHA256 != f.SHA256 {
 		t.Fatal("staged bytes differ from planned output")
 	}
 	b, _ := os.ReadFile(path)
-	converted, _ := os.ReadFile(staged[path])
+	converted, _ := os.ReadFile(staged[imageUploadKey(f)])
 	if b[25] != 6 || converted[25] != 2 {
 		t.Fatal("original overwritten or conversion missing")
 	}

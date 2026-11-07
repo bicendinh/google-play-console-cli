@@ -59,3 +59,8 @@ covers match/drift/unknown and runs after original assets have been removed,
 without uploads, validation or commits. Additional checks cover ordered image
 URLs with unknown inheritance, reports-bucket verification before saving and
 vitals --days/date conflicts with version filters.
+
+Review-v3 regressions cover filename warnings, blocked image-count reduction,
+explicit per-group consent (including copyFrom destination isolation), one note
+issue for 501 Unicode characters and acceptance at 500, and expected/actual
+values for all configured AAB metadata fields.

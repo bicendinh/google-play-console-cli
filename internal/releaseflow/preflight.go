@@ -3,12 +3,19 @@ package releaseflow
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
 
 	"playops/internal/bundle"
 	"playops/internal/fault"
 )
+
+type MetadataMismatch struct {
+	Field    string `json:"field"`
+	Expected any    `json:"expected"`
+	Actual   any    `json:"actual"`
+}
 
 type toolRunner interface {
 	Find(string) (string, error)
@@ -78,14 +85,34 @@ func preflight(ctx context.Context, m Manifest, tools toolRunner) ([]Check, erro
 	} else {
 		add("manifest", "passed", "Local fields, locales and assets checked; no server validation", nil)
 	}
+	for _, warning := range imageIntentWarnings(m) {
+		add("imageIntent", "warning", warning.Message, warning)
+	}
 	if m.Bundle != "" {
 		metadata, err := bundle.Inspect(m.Bundle)
 		if err != nil {
 			add("bundleMetadata", "failed", err.Error(), nil)
-		} else if metadata.Package != m.App || metadata.VersionCode != m.VersionCode || (m.VersionName != "" && metadata.VersionName != m.VersionName) || (m.MinSDK != 0 && metadata.MinSDK != m.MinSDK) || (m.TargetSDK != 0 && metadata.TargetSDK != m.TargetSDK) {
-			add("bundleMetadata", "failed", "AAB package/versionCode or configured versionName/minSdk/targetSdk differs from manifest", metadata)
 		} else {
-			add("bundleMetadata", "passed", "AAB metadata inspected with Go; package/versionCode and configured expectations match", metadata)
+			mismatches := []MetadataMismatch{}
+			for _, pair := range []MetadataMismatch{{"package", m.App, metadata.Package}, {"versionCode", m.VersionCode, metadata.VersionCode}} {
+				if pair.Expected != pair.Actual {
+					mismatches = append(mismatches, pair)
+				}
+			}
+			for _, pair := range []MetadataMismatch{{"versionName", m.VersionName, metadata.VersionName}, {"minSdk", m.MinSDK, metadata.MinSDK}, {"targetSdk", m.TargetSDK, metadata.TargetSDK}} {
+				if pair.Expected != "" && pair.Expected != int64(0) && pair.Expected != pair.Actual {
+					mismatches = append(mismatches, pair)
+				}
+			}
+			if len(mismatches) > 0 {
+				messages := []string{}
+				for _, v := range mismatches {
+					messages = append(messages, fmt.Sprintf("%s: expected %v, actual %v", v.Field, v.Expected, v.Actual))
+				}
+				add("bundleMetadata", "failed", strings.Join(messages, "; "), map[string]any{"observed": metadata, "mismatches": mismatches})
+			} else {
+				add("bundleMetadata", "passed", "AAB metadata inspected with Go; package/versionCode and configured expectations match", metadata)
+			}
 		}
 		signers, signerErr := bundle.Signers(m.Bundle)
 		if signerErr != nil {

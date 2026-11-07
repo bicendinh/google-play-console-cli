@@ -54,15 +54,16 @@ type Listing struct {
 	Video            string `json:"video"`
 }
 type ImageChange struct {
-	Locale               string         `json:"locale" yaml:"locale"`
-	Type                 string         `json:"type" yaml:"type"`
-	Mode                 string         `json:"mode" yaml:"mode"`                                   // replace, preserve, inherit
-	Files                []string       `json:"files,omitempty" yaml:"files,omitempty"`             // final ordered set
-	SourceFiles          []string       `json:"sourceFiles,omitempty" yaml:"sourceFiles,omitempty"` // baseline for positional replacements
-	Replace              map[int]string `json:"replace,omitempty" yaml:"replace,omitempty"`
-	InheritFrom          string         `json:"inheritFrom,omitempty" yaml:"inheritFrom,omitempty"`
-	InheritanceConfirmed bool           `json:"inheritanceConfirmed,omitempty" yaml:"inheritanceConfirmed,omitempty"`
-	CopyFrom             string         `json:"copyFrom,omitempty" yaml:"copyFrom,omitempty"`
+	Locale                  string         `json:"locale" yaml:"locale"`
+	Type                    string         `json:"type" yaml:"type"`
+	Mode                    string         `json:"mode" yaml:"mode"`                                   // replace, preserve, inherit
+	Files                   []string       `json:"files,omitempty" yaml:"files,omitempty"`             // final ordered set
+	SourceFiles             []string       `json:"sourceFiles,omitempty" yaml:"sourceFiles,omitempty"` // baseline for positional replacements
+	Replace                 map[int]string `json:"replace,omitempty" yaml:"replace,omitempty"`
+	InheritFrom             string         `json:"inheritFrom,omitempty" yaml:"inheritFrom,omitempty"`
+	InheritanceConfirmed    bool           `json:"inheritanceConfirmed,omitempty" yaml:"inheritanceConfirmed,omitempty"`
+	CopyFrom                string         `json:"copyFrom,omitempty" yaml:"copyFrom,omitempty"`
+	AllowImageCountDecrease bool           `json:"allowImageCountDecrease,omitempty" yaml:"allowImageCountDecrease,omitempty"`
 }
 type Symbol struct {
 	Type     string `json:"type" yaml:"type"`
@@ -124,6 +125,7 @@ type Plan struct {
 	Diff                []Diff              `json:"diff"`
 	RemovedVersionCodes []int64             `json:"removedVersionCodes"`
 	Preflight           []Check             `json:"preflight"`
+	Warnings            []Issue             `json:"warnings,omitempty"`
 }
 type Check struct {
 	Name    string `json:"name"`

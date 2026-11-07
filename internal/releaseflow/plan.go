@@ -2,6 +2,7 @@ package releaseflow
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -137,7 +138,7 @@ func BuildPlanWithAlpha(ctx context.Context, manifestPath, snapshotPath, profile
 	return plan, nil
 }
 func prepare(ctx context.Context, m Manifest, baseline Snapshot, inputs map[string]File) (Plan, error) {
-	p := Plan{FormatVersion: 1, Manifest: m, Baseline: baseline, TargetListings: map[string]*Listing{}, TargetImages: []PlannedImages{}, Diff: []Diff{}, RemovedVersionCodes: []int64{}}
+	p := Plan{Warnings: imageIntentWarnings(m), FormatVersion: 1, Manifest: m, Baseline: baseline, TargetListings: map[string]*Listing{}, TargetImages: []PlannedImages{}, Diff: []Diff{}, RemovedVersionCodes: []int64{}}
 	if err := ValidateManifest(m); err != nil {
 		return p, err
 	}
@@ -268,6 +269,14 @@ func prepare(ctx context.Context, m Manifest, baseline Snapshot, inputs map[stri
 		}
 		if err := imageCount(change.Type, len(files)); err != nil {
 			return p, err
+		}
+		if len(files) < len(before) {
+			if !change.AllowImageCountDecrease {
+				e := fault.New("IMAGE_COUNT_DECREASE", "Image replacement reduces the complete set; use positional replace with sourceFiles, or explicitly set allowImageCountDecrease: true for this locale/type", 2)
+				e.Details = map[string]any{"locale": change.Locale, "type": change.Type, "beforeCount": len(before), "afterCount": len(files)}
+				return p, e
+			}
+			p.Warnings = append(p.Warnings, Issue{Field: "images.files", Locale: change.Locale, Message: fmt.Sprintf("Explicitly approved image count decrease for %s: %d -> %d", group, len(before), len(files))})
 		}
 		target := PlannedImages{Locale: change.Locale, Type: change.Type, Files: []File{}}
 		for _, path := range files {

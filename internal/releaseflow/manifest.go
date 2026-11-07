@@ -2,6 +2,7 @@ package releaseflow
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math"
 	"path/filepath"
 	"regexp"
@@ -177,14 +178,9 @@ func validateManifestFirst(m Manifest) error {
 	}
 	notes := map[string]bool{}
 	for _, n := range m.Notes {
-		if err := ValidLocale(n.Language); err != nil {
-			return err
-		}
-		if notes[n.Language] || strings.TrimSpace(n.Text) == "" || utf8.RuneCountInString(n.Text) > 500 {
-			return fault.Input("Each note language must be unique with 1–500 characters")
-		}
 		notes[n.Language] = true
 	}
+
 	if m.Bundle != "" {
 		for _, locale := range m.RequiredLocales {
 			if !notes[locale] {
@@ -279,11 +275,13 @@ func validateManifestFirst(m Manifest) error {
 }
 
 type Issue struct {
-	Field   string `json:"field"`
-	Locale  string `json:"locale,omitempty"`
-	File    string `json:"file,omitempty"`
-	Index   int    `json:"index,omitempty"`
-	Message string `json:"message"`
+	Field        string `json:"field"`
+	Locale       string `json:"locale,omitempty"`
+	File         string `json:"file,omitempty"`
+	Index        int    `json:"index,omitempty"`
+	Message      string `json:"message"`
+	ActualLength *int   `json:"actualLength,omitempty"`
+	MaxLength    int    `json:"maxLength,omitempty"`
 }
 
 func inputIssues(m Manifest) []Issue {
@@ -296,8 +294,12 @@ func inputIssues(m Manifest) []Issue {
 		if err := ValidLocale(n.Language); err != nil {
 			issues = append(issues, Issue{Field: "notes", Locale: n.Language, Message: err.Error()})
 		}
-		if seen[n.Language] || strings.TrimSpace(n.Text) == "" || utf8.RuneCountInString(n.Text) > 500 {
-			issues = append(issues, Issue{Field: "notes", Locale: n.Language, Message: "Release notes require a unique locale and 1–500 characters"})
+		length := utf8.RuneCountInString(n.Text)
+		if strings.TrimSpace(n.Text) == "" || length > 500 {
+			issues = append(issues, Issue{Field: "notes.text", Locale: n.Language, Message: fmt.Sprintf("Release note for %s has %d characters; expected 1–500 nonblank characters", n.Language, length), ActualLength: &length, MaxLength: 500})
+		}
+		if seen[n.Language] {
+			issues = append(issues, Issue{Field: "notes.language", Locale: n.Language, Message: "Duplicate release note locale"})
 		}
 		seen[n.Language] = true
 	}

@@ -120,3 +120,10 @@ attested; empty image lists are not proof of default-locale fallback.
 must not be fed to plan. Use full snapshots for writes. For post-release metrics,
 use `vitals crashes --version-code 123 --days 7` (or `anrs`); do not combine
 `--days` with explicit date flags or treat missing metrics as zero.
+
+Treat `imageIntent` warnings as a request to check the intended whole image set.
+`files` does not interpret numeric filenames as replacement positions. A smaller
+set needs explicit `allowImageCountDecrease: true` in each affected image group,
+including copied destinations. Do not add that consent automatically to bypass
+`IMAGE_COUNT_DECREASE`; inspect the before/after image sets with the owner first.
+Use `sourceFiles`/`replace` when keeping other slots unchanged.

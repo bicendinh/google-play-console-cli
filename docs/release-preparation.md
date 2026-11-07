@@ -174,3 +174,26 @@ Sources: [AAPT2 schema](https://android.googlesource.com/platform/frameworks/bas
 [release lifecycle](https://developers.google.com/android-publisher/api-ref/rest/v3/applications.tracks.releases),
 [image lists](https://developers.google.com/android-publisher/api-ref/rest/v3/edits.images/list),
 [edit ownership](https://developers.google.com/android-publisher/edits).
+
+## Complete-set replacement safeguards
+
+`files` is the entire final image set, never a list of positional replacements.
+Names such as `05-example.png` and `07-example.png` do not select slots 5 and 7;
+they would become upload positions 1 and 2. Preflight emits `imageIntent` checks
+with `status: warning` when numeric filename prefixes disagree with upload order.
+Plans retain these diagnostics in `warnings`. Warnings do not invalidate an
+otherwise intentional complete-set replacement.
+
+When a final set is smaller than the snapshot set, planning fails with
+`IMAGE_COUNT_DECREASE` (exit 2), including locale/type and before/after counts.
+For an intentional reduction, explicitly add `allowImageCountDecrease: true` to
+that image group, then generate and review a new plan. The plan records that
+consent and warns about the reduction; apply/sync recheck it before mutation.
+Each `copyFrom` destination needs its own consent if its count decreases.
+For partial edits, use `sourceFiles` plus `replace` instead. A generic `--confirm`
+does not bypass this requirement, and older reduction plans must be regenerated.
+
+Failed metadata checks include `details.observed` and a `details.mismatches`
+array of `{field, expected, actual}` values, with the same values in the message.
+Note issues contain `actualLength` (Unicode characters) and `maxLength`, and
+empty text, excessive length and duplicate locales have specific diagnostics.

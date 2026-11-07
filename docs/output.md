@@ -48,3 +48,8 @@ Completed inspections return exit 0; permission/network failures remain errors.
 establish which transaction committed the state. Image inheritance uses
 `unknown`/null rather than fabricated booleans. Incomplete lifecycle snapshots
 have `complete: false`, missing fields and no usable planning baseline.
+
+`IMAGE_COUNT_DECREASE` (exit 2) requires explicit per-image-group consent in a new
+reviewed manifest/plan. `imageIntent` preflight warnings and plan `warnings` explain
+whole-set replacement semantics. Metadata failures expose expected/actual pairs;
+note issues expose the actual Unicode character count and maximum length.

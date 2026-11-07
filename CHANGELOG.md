@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.1
+
+- Require per-locale/type allowImageCountDecrease consent before planning a smaller
+  complete image set, including copyFrom destinations; retain filename intent warnings.
+- Report metadata mismatches with field-specific expected and actual values.
+- Report each note validation issue once, with Unicode character length and limit.
+
 ## v0.3.0
 
 - Read AAB metadata and PKCS#7 signer fingerprints with Go, independently of Java;

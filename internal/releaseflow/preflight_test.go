@@ -2,26 +2,17 @@ package releaseflow
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/hex"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
+	"playops/internal/bundle"
+	"playops/internal/testutil"
 	"strings"
 	"testing"
-	"time"
 )
 
 type fakeTools struct {
-	missing, invalidSigner, wrongPackage bool
-	cert                                 string
+	missing, invalidSigner bool
 }
 
 func TestLocalToolSeparatesDiagnostics(t *testing.T) {
@@ -49,38 +40,19 @@ func (f fakeTools) Run(_ context.Context, path string, args ...string) (string, 
 			return "jar verified. This jar contains unsigned entries", nil
 		}
 		return "jar verified. The signer certificate is self-signed.", nil
-	case "keytool":
-		return f.cert, nil
 	case "bundletool":
-		all := strings.Join(args, " ")
-		switch {
-		case strings.Contains(all, "@package"):
-			if f.wrongPackage {
-				return "com.other.app", nil
-			}
-			return "com.example.app", nil
-		case strings.Contains(all, "@android:versionCode"):
-			return "123", nil
-		case strings.Contains(all, "targetSdkVersion"):
-			return "36", nil
-		}
 		return "", nil
 	}
 	return "", errors.New("unexpected tool")
 }
 func TestPreflightCertificateAndRequiredChecks(t *testing.T) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	path := testutil.Bundle(t)
+	signers, err := bundle.Signers(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	template := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Upload"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature}
-	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := sha256.Sum256(der)
-	m := Manifest{App: "com.example.app", Bundle: "app.aab", VersionCode: 123, UploadCertificateSHA256: hex.EncodeToString(h[:]), Preflight: PreflightOptions{Required: true}}
-	tools := fakeTools{cert: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))}
+	m := Manifest{App: "com.example.app", Profile: "default", Track: "internal", Name: "Test", Status: "draft", Bundle: path, VersionCode: 123, UploadCertificateSHA256: signers[0], Preflight: PreflightOptions{Required: true}}
+	tools := fakeTools{}
 	checks, err := preflight(context.Background(), m, tools)
 	if err != nil {
 		t.Fatalf("%+v %v", checks, err)
@@ -90,7 +62,7 @@ func TestPreflightCertificateAndRequiredChecks(t *testing.T) {
 			t.Fatalf("unverified: %+v", c)
 		}
 	}
-	for _, bad := range []fakeTools{{missing: true}, {invalidSigner: true, cert: tools.cert}, {wrongPackage: true, cert: tools.cert}} {
+	for _, bad := range []fakeTools{{missing: true}, {invalidSigner: true}} {
 		if _, err = preflight(context.Background(), m, bad); err == nil {
 			t.Fatal("accepted missing/invalid required check")
 		}
@@ -105,7 +77,16 @@ func TestPreflightCertificateAndRequiredChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if checks[1].Status != "not_run" {
-		t.Fatal("missing tool reported as passed")
+	if checks[1].Status != "passed" {
+		t.Fatal("native metadata should run without Java")
+	}
+	m.VersionCode = 124
+	if _, err = preflight(context.Background(), m, fakeTools{missing: true}); err == nil {
+		t.Fatal("native version mismatch accepted")
+	}
+	m.VersionCode = 123
+	m.App = "com.other.app"
+	if _, err = preflight(context.Background(), m, fakeTools{missing: true}); err == nil {
+		t.Fatal("native package mismatch accepted")
 	}
 }

@@ -189,6 +189,18 @@ func flatten(prefix string, value any, out map[string]string) {
 func Execute(ctx context.Context, args []string, out, errOut io.Writer, factory Factory) int {
 	root, a := New(out, errOut, factory)
 	root.SetArgs(args)
+	// Preserve diagnostic context when parsing aborts at an earlier invalid flag.
+	for i, arg := range args {
+		if arg == "--" {
+			break
+		}
+		if strings.HasPrefix(arg, "--profile=") {
+			a.profile = strings.TrimPrefix(arg, "--profile=")
+		}
+		if arg == "--profile" && i+1 < len(args) {
+			a.profile = args[i+1]
+		}
+	}
 	if err := root.ExecuteContext(ctx); err != nil {
 		var typed *fault.Error
 		if !errors.As(err, &typed) && (strings.Contains(err.Error(), "unknown command") || strings.Contains(err.Error(), "required flag(s)")) {

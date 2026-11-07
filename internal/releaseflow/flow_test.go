@@ -235,6 +235,49 @@ type fixture struct {
 	sources                    []string
 }
 
+func TestPreparedRGBAAndCopiesVerifyAfterApply(t *testing.T) {
+	f := setup(t, []string{"en-US", "de-DE"})
+	image := testutil.RGBAFile(t, filepath.Join(t.TempDir(), "opaque.png"), 255)
+	f.manifest.Images[0].Replace[5] = image
+	f.manifest.Images[1] = releaseflow.ImageChange{Locale: "de-DE", Type: "phoneScreenshots", Mode: "replace", CopyFrom: "en-US"}
+	b, e := yaml.Marshal(f.manifest)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(f.manifestPath, b, 0600); e != nil {
+		t.Fatal(e)
+	}
+	p := f.plan(t)
+	if p.TargetImages[0].Files[4].Transform == "" || p.TargetImages[1].Files[4].SHA256 != p.TargetImages[0].Files[4].SHA256 {
+		t.Fatal("copy lost converted payload")
+	}
+	if _, e = f.service.Apply(context.Background(), p); e != nil {
+		t.Fatal(e)
+	}
+	commits, uploads, validates := f.play.commits, f.play.imageUploads, f.play.validates
+	// Verification is remote-only: removing the original assets must not prevent it.
+	if e = os.Remove(image); e != nil {
+		t.Fatal(e)
+	}
+	v, e := f.service.Verify(context.Background(), p, "")
+	if e != nil || v.Status != "match" {
+		t.Fatalf("verify %+v %v", v, e)
+	}
+	if f.play.commits != commits || f.play.imageUploads != uploads || f.play.validates != validates {
+		t.Fatal("verification mutated release state")
+	}
+	f.play.live.Images["de-DE/phoneScreenshots"][0].Sha256 = "changed"
+	v, e = f.service.Verify(context.Background(), p, "")
+	if e != nil || v.Status != "drift" {
+		t.Fatalf("drift %+v %v", v, e)
+	}
+	f.play.live.Track.Releases = nil
+	v, e = f.service.Verify(context.Background(), p, "")
+	if e != nil || v.Status != "unknown" {
+		t.Fatalf("absence should be inconclusive: %+v %v", v, e)
+	}
+}
+
 func setup(t *testing.T, locales []string) fixture {
 	t.Helper()
 	dir := t.TempDir()

@@ -17,10 +17,14 @@ does not provide shared credentials, collect keys or proxy developer accounts.
    Grant access to the apps you want to manage. Give read-only app information
    access for vitals and the release permission appropriate to your test or
    production track. Publishing rights are separate from read access.
-5. In Play Console > Play apps reports, copy the Cloud Storage URI for your
+5. In Play Console > Manage account > Play apps reports, select Copy Cloud Storage URI for your
    account. Configure the bucket name with `config set reports-bucket`. Do not
    derive it from the developer ID or a Cloud project name. Report access is
-   granted through Play Console; the report bucket is Google managed.
+   granted through Play Console; the report bucket is Google managed. Bulk reports
+   require View app information at Global scope. IAM roles on your own Cloud
+   project do not grant access to this Google-managed account bucket.
+   Use `playops config set reports-bucket gs://BUCKET --verify --app PACKAGE` to
+   check access before saving; a failed check leaves the old configuration intact.
 6. Run `auth login --service-account /absolute/key.json`, `config set app PACKAGE`
    and `doctor`. No account-to-Cloud-project linking is required by current APIs.
 

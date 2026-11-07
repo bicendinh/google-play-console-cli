@@ -54,27 +54,31 @@ func (a *App) releases() *cobra.Command {
 			return model.Result{}, err
 		}
 		rows, err := client.Releases(ctx, p.App, track)
-		return model.Result{Data: rows, Meta: map[string]any{"source": "android-publisher", "app": p.App, "track": track, "notice": "Lifecycle and rollout state are distinct. Google returns at most 20 non-obsolete releases."}}, err
+		return model.Result{Data: rows, Meta: map[string]any{"source": "android-publisher", "app": p.App, "track": track, "reviewScope": "release", "globalReviewState": "unknown", "notice": lifecycleNotice}}, err
 	})}
 	list.Flags().StringVar(&track, "track", "", "Track identifier (required)")
 	_ = list.MarkFlagRequired("track")
-	group.AddCommand(list, a.releaseWrite("upload"), a.releaseWrite("publish"), a.releaseWrite("promote"), a.releaseSnapshot(), a.releasePlan(), a.releaseApply(), a.releasePreflight(), a.releaseStatus(), a.symbols())
+	group.AddCommand(list, a.releaseWrite("upload"), a.releaseWrite("publish"), a.releaseWrite("promote"), a.releaseSnapshot(), a.releasePlan(), a.releaseApply(), a.releasePreflight(), a.releaseStatus(), a.releaseInit(), a.releaseVerify(), a.symbols())
 	return group
 }
 func (a *App) rollout() *cobra.Command {
 	group := &cobra.Command{Use: "rollout", Short: "Inspect and manage staged releases"}
 	var track string
-	var confirm bool
+	var confirm, noEdit bool
 	get := &cobra.Command{Use: "get", Short: "Read rollout configuration through a temporary, discarded edit", Args: exact(0), RunE: a.run(func(ctx context.Context, _ *cobra.Command, _ []string) (model.Result, error) {
 		if track == "" || strings.ContainsAny(track, "/\\ \t\n\r") {
 			return model.Result{}, fault.Input("--track must be a track identifier")
 		}
-		if !confirm {
+		if !confirm && !noEdit {
 			return model.Result{}, fault.Input("rollout get requires --confirm because opening its temporary edit can invalidate another edit by the same identity; releases list is edit-free")
 		}
 		client, p, err := a.client(ctx, true)
 		if err != nil {
 			return model.Result{}, err
+		}
+		if noEdit {
+			rows, e := client.Releases(ctx, p.App, track)
+			return model.Result{Data: map[string]any{"releases": rows, "rolloutFraction": nil, "complete": false}, Meta: map[string]any{"source": "android-publisher", "app": p.App, "track": track, "editOpened": false, "notice": lifecycleNotice}}, e
 		}
 		unlock, err := a.lock(p.App)
 		if err != nil {
@@ -86,6 +90,7 @@ func (a *App) rollout() *cobra.Command {
 	})}
 	get.Flags().StringVar(&track, "track", "", "Track identifier (required)")
 	get.Flags().BoolVar(&confirm, "confirm", false, "Consent to opening and discarding a temporary edit")
+	get.Flags().BoolVar(&noEdit, "no-edit", false, "Read lifecycle only; rollout fraction is unavailable")
 	_ = get.MarkFlagRequired("track")
 	group.AddCommand(get, a.releaseWrite("set"), a.releaseWrite("halt"), a.releaseWrite("resume"))
 	return group

@@ -1,4 +1,4 @@
-# Atomic releases (v0.2)
+# Atomic releases
 
 Use a reviewed manifest to upload an AAB, release notes, listing text, screenshots,
 feature graphics and optional debug symbols in **one edit**. The transaction is
@@ -135,7 +135,11 @@ complete new set sequentially. It checks each upload hash, then reads the group'
 count, order and hashes. It verifies all affected resources again before commit.
 Any mismatch aborts. Image IDs can change; the invariant is content and order.
 
-PNG screenshots/graphics must be 24-bit RGB without alpha; JPEG is accepted.
+Uploaded PNG screenshots/graphics must be 24-bit RGB without alpha; JPEG is accepted.
+Opaque 8-bit RGBA sources are normalized automatically, with original and output
+hashes recorded in the plan. Actual transparency fails. Use `flattenAlpha: never`
+or `--flatten-alpha never` for strict input validation. See
+[preparation and verification](release-preparation.md) for policies and provenance.
 Phone screenshots need 2–8 images, dimensions 320–3840 and aspect ratio at most
 2:1; other screenshot groups support 1–8. Feature graphics require 1024×500, icons
 512×512 PNG, and TV banners 1280×720. These local checks do not guarantee Google
@@ -151,10 +155,12 @@ It does not remove an existing explicit set or configure inheritance on Google.
 ## Preflight and optional Android tools
 
 Local planning always validates manifest fields, asset formats, coverage and
-hashes against the snapshot. If available, `bundletool` validates the bundle and
-reads package/versionCode/targetSdk; `jarsigner` verifies JAR integrity and rejects
-unsigned entries; `keytool` compares the upload signer to the configured
-`uploadCertificateSha256`. Compare the **upload** certificate, not the certificate
+hashes against the snapshot. Package/version code and signer fingerprints are
+always inspected with Go; optional versionName/minSdk/targetSdk expectations are
+compared too. If available, `bundletool` additionally validates bundle structure;
+`jarsigner` verifies JAR integrity and rejects unsigned entries. Go compares the
+actual signer to `uploadCertificateSha256`; certificate extraction alone is not
+signature verification. Compare the **upload** certificate, not the certificate
 of an APK re-signed by Google. Upload certificates can be legitimately reset.
 
 ```yaml
@@ -164,7 +170,6 @@ preflight:
   bundletool: /tools/bundletool.jar
   java: java
   jarsigner: jarsigner
-  keytool: keytool
 ```
 
 Tool paths/commands are explicit executable arguments; no shell or downloads are
@@ -220,3 +225,7 @@ Legacy release commands accept explicit `--in-review` and
 `--changes-not-sent-for-review`. Legacy `--replace-existing` is redirected to the
 snapshot/plan/apply workflow, so artifacts cannot be dropped without a reviewed
 diff and drift check.
+
+See [release preparation and verification](release-preparation.md) for directory-based
+`releases init`, `copyFrom`, scoped review states, full/limited `releases verify`,
+ordered image listing and incomplete `--no-edit` snapshots.

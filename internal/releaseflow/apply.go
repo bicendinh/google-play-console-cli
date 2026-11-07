@@ -24,6 +24,9 @@ func (s Service) Apply(ctx context.Context, p Plan) (Outcome, error) {
 		if e != nil {
 			return Outcome{}, e
 		}
+		// CLI alpha policy overrides are stored in the reviewed plan, while the
+		// original manifest bytes remain a hashed input.
+		m.FlattenAlpha = p.Manifest.FlattenAlpha
 		if !publisher.Same(m, p.Manifest) {
 			return Outcome{}, fault.Conflict("Manifest contents no longer match the reviewed plan")
 		}

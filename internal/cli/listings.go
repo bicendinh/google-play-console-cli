@@ -110,7 +110,7 @@ func (a *App) listings() *cobra.Command {
 }
 func (a *App) listingImages() *cobra.Command {
 	group := &cobra.Command{Use: "images", Short: "Plan ordered images offline and sync into a caller-owned edit"}
-	var manifest, snapshot, out, locale, kind string
+	var manifest, snapshot, out, locale, kind, alpha string
 	var replace, sources []string
 	var dry bool
 	plan := &cobra.Command{Use: "plan", Short: "Create an image-only plan with a complete verified source set", Args: exact(0)}
@@ -123,6 +123,7 @@ func (a *App) listingImages() *cobra.Command {
 	f.StringArrayVar(&replace, "replace", nil, "One-based POSITION=FILE; repeat for multiple replacements")
 	f.StringSliceVar(&sources, "source-files", nil, "Complete baseline image files in snapshot order (comma-separated)")
 	f.BoolVar(&dry, "dry-run", true, "Offline only; never opens an edit")
+	f.StringVar(&alpha, "flatten-alpha", "", "PNG policy: auto (default), never or error; stored in the plan")
 	required(plan, "snapshot", "out")
 	plan.RunE = a.run(func(ctx context.Context, _ *cobra.Command, _ []string) (model.Result, error) {
 		if !dry {
@@ -134,7 +135,7 @@ func (a *App) listingImages() *cobra.Command {
 			if locale != "" || len(replace) > 0 || len(sources) > 0 {
 				return model.Result{}, fault.Input("Use a manifest or positional replacement flags, not both")
 			}
-			p, err = releaseflow.BuildPlan(ctx, manifest, snapshot, a.profile)
+			p, err = releaseflow.BuildPlanWithAlpha(ctx, manifest, snapshot, a.profile, alpha)
 		} else {
 			replacements := map[int]string{}
 			for _, value := range replace {
@@ -158,7 +159,7 @@ func (a *App) listingImages() *cobra.Command {
 					return model.Result{}, err
 				}
 			}
-			p, err = releaseflow.BuildImagePlan(ctx, snapshot, locale, kind, sources, replacements)
+			p, err = releaseflow.BuildImagePlanWithAlpha(ctx, snapshot, locale, kind, sources, replacements, alpha)
 		}
 		if err != nil {
 			return model.Result{}, err
@@ -206,6 +207,6 @@ func (a *App) listingImages() *cobra.Command {
 		}
 		return model.Result{Data: map[string]any{"editId": edit, "committed": false, "planDigest": p.Digest, "transactionOwner": "caller"}}, editFailure(err, edit)
 	})
-	group.AddCommand(plan, sync)
+	group.AddCommand(plan, sync, a.listingImagesList())
 	return group
 }

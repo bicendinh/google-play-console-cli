@@ -4,6 +4,9 @@ app: com.example.app
 profile: default
 bundle: app-release.aab
 versionCode: 123
+# Optional exact expectations, checked directly from the AAB without Java.
+versionName: "1.2.3"
+flattenAlpha: auto
 name: "1.2.3"
 track: internal
 status: draft

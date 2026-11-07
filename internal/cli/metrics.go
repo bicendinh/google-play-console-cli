@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -67,13 +68,27 @@ func (a *App) vitals() *cobra.Command {
 	for _, kind := range []string{"crashes", "anrs"} {
 		var from, to, country, dimension string
 		var version int64
+		var days int
 		c := &cobra.Command{Use: kind, Short: "Query daily " + kind + " with data freshness", Args: exact(0)}
 		c.Flags().StringVar(&from, "from", "", "First date, inclusive (America/Los_Angeles)")
 		c.Flags().StringVar(&to, "to", "", "Last date, inclusive (America/Los_Angeles)")
 		c.Flags().StringVar(&country, "country", "", "Two-letter country filter")
 		c.Flags().Int64Var(&version, "version-code", 0, "Positive app version code filter")
 		c.Flags().StringVar(&dimension, "group-by", "", "Dimension: country or app-version (default: app-wide)")
-		c.RunE = a.run(func(ctx context.Context, _ *cobra.Command, _ []string) (model.Result, error) {
+		c.Flags().IntVar(&days, "days", 0, "Last N complete source-calendar days (1–1095); cannot combine with --from/--to")
+		c.RunE = a.run(func(ctx context.Context, cmd *cobra.Command, _ []string) (model.Result, error) {
+			if cmd.Flags().Changed("days") {
+				if days < 1 || days > 1095 || cmd.Flags().Changed("from") || cmd.Flags().Changed("to") {
+					return model.Result{}, fault.Input("--days requires 1–1095 and cannot be combined with --from/--to")
+				}
+				loc, e := time.LoadLocation("America/Los_Angeles")
+				if e != nil {
+					return model.Result{}, e
+				}
+				today := a.Now().In(loc)
+				from = today.AddDate(0, 0, -days).Format(time.DateOnly)
+				to = today.AddDate(0, 0, -1).Format(time.DateOnly)
+			}
 			if version < 0 {
 				return model.Result{}, fault.Input("--version-code must be positive")
 			}

@@ -15,6 +15,10 @@ type Manifest struct {
 	Profile                 string                  `json:"profile" yaml:"profile"`
 	Bundle                  string                  `json:"bundle,omitempty" yaml:"bundle,omitempty"`
 	VersionCode             int64                   `json:"versionCode,omitempty" yaml:"versionCode,omitempty"`
+	VersionName             string                  `json:"versionName,omitempty" yaml:"versionName,omitempty"`
+	MinSDK                  int64                   `json:"minSdk,omitempty" yaml:"minSdk,omitempty"`
+	TargetSDK               int64                   `json:"targetSdk,omitempty" yaml:"targetSdk,omitempty"`
+	FlattenAlpha            string                  `json:"flattenAlpha,omitempty" yaml:"flattenAlpha,omitempty"`
 	Track                   string                  `json:"track" yaml:"track"`
 	FromTrack               string                  `json:"fromTrack,omitempty" yaml:"fromTrack,omitempty"`
 	Name                    string                  `json:"name,omitempty" yaml:"name,omitempty"`
@@ -58,6 +62,7 @@ type ImageChange struct {
 	Replace              map[int]string `json:"replace,omitempty" yaml:"replace,omitempty"`
 	InheritFrom          string         `json:"inheritFrom,omitempty" yaml:"inheritFrom,omitempty"`
 	InheritanceConfirmed bool           `json:"inheritanceConfirmed,omitempty" yaml:"inheritanceConfirmed,omitempty"`
+	CopyFrom             string         `json:"copyFrom,omitempty" yaml:"copyFrom,omitempty"`
 }
 type Symbol struct {
 	Type     string `json:"type" yaml:"type"`
@@ -76,19 +81,25 @@ type Image struct {
 	SHA256 string `json:"sha256"`
 }
 type Snapshot struct {
-	FormatVersion int                 `json:"formatVersion"`
-	App           string              `json:"app"`
-	Profile       string              `json:"profile"`
-	CapturedAt    time.Time           `json:"capturedAt"`
-	Track         *pub.Track          `json:"track"`
-	SourceTrack   *pub.Track          `json:"sourceTrack,omitempty"`
-	Listings      map[string]*Listing `json:"listings"`
-	Images        map[string][]Image  `json:"images"`
+	FormatVersion int                   `json:"formatVersion"`
+	App           string                `json:"app"`
+	Profile       string                `json:"profile"`
+	CapturedAt    time.Time             `json:"capturedAt"`
+	Track         *pub.Track            `json:"track"`
+	SourceTrack   *pub.Track            `json:"sourceTrack,omitempty"`
+	Listings      map[string]*Listing   `json:"listings"`
+	Images        map[string][]Image    `json:"images"`
+	Complete      *bool                 `json:"complete,omitempty"`
+	Lifecycle     []*pub.ReleaseSummary `json:"lifecycle,omitempty"`
+	MissingFields []string              `json:"missingFields,omitempty"`
 }
 type File struct {
-	Path   string `json:"path"`
-	SHA256 string `json:"sha256"`
-	Size   int64  `json:"size"`
+	Path         string `json:"path"`
+	SHA256       string `json:"sha256"`
+	Size         int64  `json:"size"`
+	SourceSHA256 string `json:"sourceSha256,omitempty"`
+	SourceSize   int64  `json:"sourceSize,omitempty"`
+	Transform    string `json:"transform,omitempty"`
 }
 type Diff struct {
 	Resource string `json:"resource"`
@@ -118,6 +129,7 @@ type Check struct {
 	Name    string `json:"name"`
 	Status  string `json:"status"`
 	Message string `json:"message"`
+	Details any    `json:"details,omitempty"`
 }
 type Outcome struct {
 	EditID       string   `json:"editId"`

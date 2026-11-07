@@ -129,7 +129,7 @@ func LoadSnapshot(path string) (Snapshot, error) {
 	if err := ReadJSON(path, &s); err != nil {
 		return s, err
 	}
-	if s.FormatVersion != 1 || s.Track == nil || s.Listings == nil || s.Images == nil {
+	if s.FormatVersion != 1 || (s.Complete != nil && !*s.Complete) || s.Track == nil || s.Listings == nil || s.Images == nil {
 		return s, fault.Input("Unsupported or incomplete snapshot")
 	}
 	return s, nil
@@ -191,6 +191,61 @@ func stage(p Plan) (map[string]string, func(), error) {
 			return nil, nil, fault.Conflict("Plan input changed: %s", expected.Path)
 		}
 		staged[expected.Path] = outpath
+	}
+	transforms := map[string]File{}
+	for _, group := range p.TargetImages {
+		for _, file := range group.Files {
+			if before, ok := transforms[file.Path]; ok && (before.SHA256 != file.SHA256 || before.Transform != file.Transform) {
+				cleanup()
+				return nil, nil, fault.Input("One image source has conflicting upload transformations: %s", file.Path)
+			}
+			transforms[file.Path] = file
+		}
+	}
+	for path, expected := range transforms {
+		if expected.Transform == "" {
+			continue
+		}
+		if expected.Transform != "opaque-png-rgb-v1" {
+			cleanup()
+			return nil, nil, fault.Input("Unsupported image transformation")
+		}
+		input, ok := staged[path]
+		if !ok {
+			cleanup()
+			return nil, nil, fault.Input("Transformed image is not a plan input")
+		}
+		source, e := HashFile(input)
+		if e != nil || source.SHA256 != expected.SourceSHA256 || source.Size != expected.SourceSize {
+			cleanup()
+			return nil, nil, fault.Conflict("Image source hash differs from transformation plan")
+		}
+		// Dimensions/type were validated during planning; conversion is independent
+		// of image kind. Use the declared kind to check it again on the staged input.
+		kind := ""
+		for _, g := range p.TargetImages {
+			for _, f := range g.Files {
+				if f.Path == path {
+					kind = g.Type
+				}
+			}
+		}
+		data, e := imagePayload(input, kind, "auto")
+		if e != nil || data == nil {
+			cleanup()
+			return nil, nil, fault.Conflict("Cannot reproduce planned image transformation")
+		}
+		h := sha256.Sum256(data)
+		if hex.EncodeToString(h[:]) != expected.SHA256 || int64(len(data)) != expected.Size {
+			cleanup()
+			return nil, nil, fault.Conflict("Converted image differs from reviewed output hash; regenerate the plan")
+		}
+		output := input + ".rgb.png"
+		if e = os.WriteFile(output, data, 0600); e != nil {
+			cleanup()
+			return nil, nil, e
+		}
+		staged[path] = output
 	}
 	return staged, cleanup, nil
 }

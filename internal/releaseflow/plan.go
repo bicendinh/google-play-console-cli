@@ -106,9 +106,15 @@ func (s Service) captureInEdit(ctx context.Context, m Manifest, id string) (Snap
 	return snap, nil
 }
 func BuildPlan(ctx context.Context, manifestPath, snapshotPath, profile string) (Plan, error) {
+	return BuildPlanWithAlpha(ctx, manifestPath, snapshotPath, profile, "")
+}
+func BuildPlanWithAlpha(ctx context.Context, manifestPath, snapshotPath, profile, alpha string) (Plan, error) {
 	m, err := LoadManifest(manifestPath, profile)
 	if err != nil {
 		return Plan{}, err
+	}
+	if alpha != "" {
+		m.FlattenAlpha = alpha
 	}
 	snapshot, err := LoadSnapshot(snapshotPath)
 	if err != nil {
@@ -135,7 +141,7 @@ func prepare(ctx context.Context, m Manifest, baseline Snapshot, inputs map[stri
 	if err := ValidateManifest(m); err != nil {
 		return p, err
 	}
-	if baseline.FormatVersion != 1 || baseline.Track == nil || baseline.App != m.App || baseline.Profile != m.Profile || baseline.Track.Track != m.Track {
+	if baseline.FormatVersion != 1 || (baseline.Complete != nil && !*baseline.Complete) || baseline.Track == nil || baseline.App != m.App || baseline.Profile != m.Profile || baseline.Track.Track != m.Track {
 		return p, fault.Input("Snapshot must match the manifest app, profile and track")
 	}
 	if m.FromTrack != "" && (baseline.SourceTrack == nil || baseline.SourceTrack.Track != m.FromTrack) {
@@ -214,7 +220,11 @@ func prepare(ctx context.Context, m Manifest, baseline Snapshot, inputs map[stri
 		}
 	}
 	plannedCounts := map[string]int{}
-	for _, change := range m.Images {
+	imageChanges, err := expandedImages(m.Images)
+	if err != nil {
+		return p, err
+	}
+	for _, change := range imageChanges {
 		group := key(change.Locale, change.Type)
 		before := baseline.Images[group]
 		if baseline.Listings[change.Locale] == nil && p.TargetListings[change.Locale] == nil {
@@ -261,10 +271,11 @@ func prepare(ctx context.Context, m Manifest, baseline Snapshot, inputs map[stri
 		}
 		target := PlannedImages{Locale: change.Locale, Type: change.Type, Files: []File{}}
 		for _, path := range files {
-			if err := ValidateImage(path, change.Type); err != nil {
-				return p, err
+			_, e := add(path)
+			if e != nil {
+				return p, e
 			}
-			f, e := add(path)
+			f, e := ImageFile(path, change.Type, m.FlattenAlpha)
 			if e != nil {
 				return p, e
 			}

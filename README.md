@@ -4,9 +4,11 @@ A small, scriptable Google Play CLI for AI agents and developers. Upload signed
 Android App Bundles as drafts, publish or promote releases, control staged
 rollouts, and read installs, ratings, crash rates and ANR rates.
 
-Version 0.2 adds [atomic releases](docs/atomic-releases.md): one reviewed plan for
-AAB + notes + listing text + ordered images + symbols, applied in one edit. It
-also adds local preflight and [read-only product/subscription catalogs](docs/catalog.md).
+Version 0.3 adds [release preparation and verification](docs/release-preparation.md):
+generate manifests, inspect AAB metadata without Java, normalize opaque PNGs,
+copy image sets between locales, and compare remote state with a reviewed plan.
+[Atomic releases](docs/atomic-releases.md) apply AAB + notes + listings + images +
+symbols in one edit; [catalog commands](docs/catalog.md) remain read-only.
 
 Start with the [sample release manifest](docs/examples/release.yaml) and adapt its
 package name, locales and asset paths for your app.
@@ -136,7 +138,7 @@ daily aggregation timezone. See [data definitions and freshness](docs/metrics.md
 make check
 make test
 make build
-make release VERSION=v0.2.0
+make release VERSION=v0.3.0
 ```
 
 The tests use local fake Google HTTP APIs and synthetic bundles; no credentials
@@ -150,6 +152,7 @@ Google Play by this repository's CI or release workflow.
 
 Reviews, catalog mutations, browser OAuth, MCP, automatic rollout monitoring and
 app build/signing remain out of scope. Deep local preflight optionally requires
-Java/bundletool/jarsigner/keytool; missing checks are reported, not silently passed.
+Java/bundletool/jarsigner; metadata and signer fingerprints are read in Go.
+Missing optional checks are reported, not silently passed.
 
 MIT licensed. Independent project; not affiliated with Google.

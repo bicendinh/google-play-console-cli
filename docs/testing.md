@@ -9,7 +9,7 @@ freshness boundaries, JSON/exit contracts, profiles and offline dry runs.
 
 `make check` checks formatting, runs vet and verifies downloaded dependency
 checksums. CI additionally builds and runs race tests on macOS, Linux and Windows.
-`make release VERSION=v0.2.0` cross-builds six archives and a `SHA256SUMS` file.
+`make release VERSION=v0.3.0` cross-builds six archives and a `SHA256SUMS` file.
 
 v0.2 fixtures additionally exercise eight locales in one edit/commit, positional
 image replacement and unchanged content, last-locale/no-op/order failures,
@@ -42,3 +42,20 @@ To compare metrics manually, run `stats installs`, `stats ratings`, `vitals
 crashes` and `vitals anrs` for a fixed historical window and match the source
 dates, dimensions and values to the exported CSVs/Console. Account for export
 latency and freshness; missing rows must not be treated as zero.
+
+## Release preparation regression coverage
+
+Native AAB fixtures exercise protobuf XML metadata, PKCS#7 signer selection,
+invalid/duplicate manifests and package/version mismatches with no Java tools.
+Forced color-type-6 PNG fixtures retain alpha=255 instead of letting Go's encoder
+optimize them into RGB; tests cover source/output hash provenance, immutable
+staging, transparent-pixel rejection, strict policies, copyFrom expansion and
+cycles, and the complete conversion/copy/apply/verify path.
+
+CLI fixtures check offline init, partial-set guards, aggregated locale/file/index
+errors, profile context on flag errors, scoped lifecycle states, incomplete
+snapshots and lifecycle-only commands that never create edits. Verification
+covers match/drift/unknown and runs after original assets have been removed,
+without uploads, validation or commits. Additional checks cover ordered image
+URLs with unknown inheritance, reports-bucket verification before saving and
+vitals --days/date conflicts with version filters.

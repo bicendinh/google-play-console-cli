@@ -44,7 +44,7 @@ func (a *App) doctor() *cobra.Command {
 			_, e = client.Freshness(ctx, p.App, "anrs")
 			return e
 		})
-		probe("reports", "Set reports-bucket from Play Console > Play apps reports; grant the service account access to app reports.", func() error {
+		probe("reports", "In Play Console > Manage account > Play apps reports, select Copy Cloud Storage URI. Grant this service account View app information with Global scope for bulk reports. Run playops config set reports-bucket gs://BUCKET --verify --app PACKAGE. Report buckets are Google managed; granting IAM on your own Cloud project is insufficient.", func() error {
 			if p.ReportsBucket == "" {
 				return fault.Input("reports-bucket is not configured")
 			}

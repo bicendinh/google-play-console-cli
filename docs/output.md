@@ -40,3 +40,11 @@ v0.2 adds `PREFLIGHT_FAILED` (exit 2, checks in details) and `LISTING_NOT_FOUND`
 tokens and control characters while retaining actionable validation context.
 New commands use the same schema version 1 envelope. Plans/snapshots have their
 own `formatVersion: 1`; plan digests use canonical JSON and are not signatures.
+
+Release verification returns an inspection status independently of process exit:
+`match`, `drift`, `pending` (explicit lifecycle evidence only), or `unknown`.
+Completed inspections return exit 0; permission/network failures remain errors.
+`missingEvidence` explains uncertainty. `committed: null` means readback cannot
+establish which transaction committed the state. Image inheritance uses
+`unknown`/null rather than fabricated booleans. Incomplete lifecycle snapshots
+have `complete: false`, missing fields and no usable planning baseline.

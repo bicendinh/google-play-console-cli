@@ -11,6 +11,11 @@ flag, the window is the previous seven complete calendar days in
 `America/Los_Angeles`. A maximum three-year window is accepted. The API's exclusive
 end date is calculated internally. Report day labels are preserved.
 
+Vitals also accepts `--days N` for 1–1095 complete source-calendar days, including
+across daylight-saving transitions. It cannot be combined with `--from` or `--to`.
+For example: `playops vitals crashes --version-code 123 --days 7`. Freshness can
+still shorten the available data within that requested window.
+
 Vitals freshness is fetched first. The query is capped at the latest available
 daily endpoint while metadata preserves your requested window. It does not
 silently shift the window backward to fill seven available days.

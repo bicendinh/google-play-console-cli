@@ -89,7 +89,8 @@ func (a *App) configuration() *cobra.Command {
 		sort.Strings(names)
 		return model.Result{Data: names}, e
 	})})
-	group.AddCommand(&cobra.Command{Use: "set KEY VALUE", Short: "Set app or reports-bucket in the selected profile", Args: exact(2), RunE: a.run(func(_ context.Context, _ *cobra.Command, args []string) (model.Result, error) {
+	var verify bool
+	set := &cobra.Command{Use: "set KEY VALUE", Short: "Set app or reports-bucket in the selected profile", Args: exact(2), RunE: a.run(func(ctx context.Context, _ *cobra.Command, args []string) (model.Result, error) {
 		path, c, p, err := a.settings()
 		if err != nil {
 			return model.Result{}, err
@@ -108,9 +109,29 @@ func (a *App) configuration() *cobra.Command {
 		default:
 			return model.Result{}, fault.Input("KEY must be app or reports-bucket")
 		}
+		if verify {
+			if args[0] != "reports-bucket" {
+				return model.Result{}, fault.Input("--verify is supported for reports-bucket only")
+			}
+			if err = config.ValidateApp(p.App); err != nil {
+				return model.Result{}, err
+			}
+			client, e := a.Factory(ctx, p.Credentials)
+			if e != nil {
+				return model.Result{}, e
+			}
+			if client.HTTP != nil {
+				client.HTTP.Timeout = a.requestTimeout
+			}
+			if err = client.CheckReports(ctx, p.ReportsBucket, p.App); err != nil {
+				return model.Result{}, err
+			}
+		}
 		c.Profiles[a.profile] = p
 		err = config.Save(path, c)
-		return model.Result{Data: map[string]any{"profile": a.profile, "settings": p}}, err
-	})})
+		return model.Result{Data: map[string]any{"profile": a.profile, "settings": p, "networkValidated": verify}}, err
+	})}
+	set.Flags().BoolVar(&verify, "verify", false, "Verify report access before saving; requires a configured app or --app")
+	group.AddCommand(set)
 	return group
 }

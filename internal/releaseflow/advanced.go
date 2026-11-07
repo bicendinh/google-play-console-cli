@@ -10,11 +10,15 @@ import (
 )
 
 func BuildImagePlan(ctx context.Context, snapshotPath, locale, kind string, sources []string, replacements map[int]string) (Plan, error) {
+	return BuildImagePlanWithAlpha(ctx, snapshotPath, locale, kind, sources, replacements, "")
+}
+func BuildImagePlanWithAlpha(ctx context.Context, snapshotPath, locale, kind string, sources []string, replacements map[int]string, alpha string) (Plan, error) {
 	snapshot, err := LoadSnapshot(snapshotPath)
 	if err != nil {
 		return Plan{}, err
 	}
 	m := Manifest{App: snapshot.App, Profile: snapshot.Profile, Track: snapshot.Track.Track, Status: "draft", Images: []ImageChange{{Locale: locale, Type: kind, Mode: "replace", SourceFiles: sources, Replace: replacements}}}
+	m.FlattenAlpha = alpha
 	input, err := HashFile(snapshotPath)
 	if err != nil {
 		return Plan{}, err

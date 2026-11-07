@@ -37,12 +37,44 @@ func Same(a, b any) bool {
 	return string(x) == string(y)
 }
 
+type EditReceipt struct {
+	EditID     string `json:"editId"`
+	EditOpened bool   `json:"editOpened"`
+	Discarded  bool   `json:"discarded"`
+	Committed  bool   `json:"committed"`
+}
+
+// Inspect returns success only after Google acknowledges deleting the temporary
+// edit. It never validates or commits. Failure details retain cleanup evidence.
+func Inspect(ctx context.Context, api API, app string, read func(string) error) (EditReceipt, error) {
+	readSucceeded := false
+	r := EditReceipt{}
+	_, err := transaction(ctx, api, app, nil, func(id string) error { e := read(id); readSucceeded = e == nil; return e }, &r)
+	if err != nil {
+		f := inspectionError(err, r, readSucceeded)
+		return r, f
+	}
+	return r, nil
+}
+func inspectionError(err error, r EditReceipt, readSucceeded bool) *fault.Error {
+	f := fault.From(err)
+	f.Details = map[string]any{"editId": r.EditID, "editOpened": r.EditOpened, "discarded": r.Discarded, "committed": false, "readSucceeded": readSucceeded, "cause": f.Details}
+	return f
+}
+
 // Transaction is the single owner of an edit. Callback helpers cannot commit.
 // Snapshot reads and writes share the same cleanup and uncertainty rules.
 func Transaction(ctx context.Context, api API, app string, commit func(context.Context, string) error, fn func(string) error) (id string, err error) {
+	return transaction(ctx, api, app, commit, fn, nil)
+}
+func transaction(ctx context.Context, api API, app string, commit func(context.Context, string) error, fn func(string) error, receipt *EditReceipt) (id string, err error) {
 	id, err = api.Begin(ctx, app)
 	if err != nil {
 		return "", EditError(err, "create")
+	}
+	if receipt != nil {
+		receipt.EditID = id
+		receipt.EditOpened = true
 	}
 	committed, unknown := false, false
 	defer func() {
@@ -60,6 +92,8 @@ func Transaction(ctx context.Context, api API, app string, commit func(context.C
 				f.Details = map[string]any{"editId": id, "cleanup": "failed; edit may remain until expiry"}
 				err = f
 			}
+		} else if receipt != nil {
+			receipt.Discarded = true
 		}
 	}()
 	if err = fn(id); err != nil {

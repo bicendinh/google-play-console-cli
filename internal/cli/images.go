@@ -62,15 +62,16 @@ func (a *App) listingImagesList() *cobra.Command {
 			}
 			return nil
 		}
+		receipt := publisher.EditReceipt{EditID: edit}
 		if edit != "" {
 			err = client.CheckEdit(ctx, p.App, edit)
 			if err == nil {
 				err = read(edit)
 			}
 		} else {
-			_, err = publisher.Transaction(ctx, client, p.App, nil, read)
+			receipt, err = publisher.Inspect(ctx, client, p.App, read)
 		}
-		return model.Result{Data: map[string]any{"locale": locale, "type": kind, "images": images, "inheritance": "unknown", "usesDefaultImages": nil}, Meta: map[string]any{"source": "android-publisher", "editOpened": edit == "", "committed": false, "notice": "API image lists do not identify inheritance; empty images do not prove default-locale fallback. Preview URLs are not proof of public Store visibility."}}, err
+		return model.Result{Data: map[string]any{"locale": locale, "type": kind, "images": images, "inheritance": "unknown", "usesDefaultImages": nil}, Meta: map[string]any{"source": "android-publisher", "editOpened": receipt.EditOpened, "discarded": receipt.Discarded, "editId": receipt.EditID, "committed": false, "notice": "API image lists do not identify inheritance; empty images do not prove default-locale fallback. Preview URLs are not proof of public Store visibility."}}, err
 	})
 	return c
 }

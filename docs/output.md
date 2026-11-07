@@ -53,3 +53,10 @@ have `complete: false`, missing fields and no usable planning baseline.
 reviewed manifest/plan. `imageIntent` preflight warnings and plan `warnings` explain
 whole-set replacement semantics. Metadata failures expose expected/actual pairs;
 note issues expose the actual Unicode character count and maximum length.
+
+Snapshot and image inspection report edit lifecycle evidence: `editId`,
+`editOpened`, `discarded`, `committed`. `IMAGE_ORIGINAL_UNAVAILABLE` (exit 4) means
+preview bytes cannot be used as snapshot originals; `IMAGE_DOWNLOAD_FAILED`
+(exit 5) is a retrieval/size failure, and `UNSUPPORTED_IMAGE_URL` (exit 2) blocks
+unsupported hosts or URL schemes. These failures never authorize a fallback to
+unverified image bytes.

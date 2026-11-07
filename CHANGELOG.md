@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.2
+
+- Report edit IDs and acknowledged cleanup for snapshot and image inspection.
+- Add snapshot-bound image downloads that accept only exact SHA-256 matches,
+  use anonymous HTTPS requests and leave no partial originals after a failure.
+
 ## v0.3.1
 
 - Require per-locale/type allowImageCountDecrease consent before planning a smaller

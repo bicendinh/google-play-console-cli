@@ -207,6 +207,6 @@ func (a *App) listingImages() *cobra.Command {
 		}
 		return model.Result{Data: map[string]any{"editId": edit, "committed": false, "planDigest": p.Digest, "transactionOwner": "caller"}}, editFailure(err, edit)
 	})
-	group.AddCommand(plan, sync, a.listingImagesList())
+	group.AddCommand(plan, sync, a.listingImagesList(), a.listingImagesDownload())
 	return group
 }

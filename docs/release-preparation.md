@@ -197,3 +197,56 @@ Failed metadata checks include `details.observed` and a `details.mismatches`
 array of `{field, expected, actual}` values, with the same values in the message.
 Note issues contain `actualLength` (Unicode characters) and `maxLength`, and
 empty text, excessive length and duplicate locales have specific diagnostics.
+
+## Recover original image files
+
+```sh
+mkdir -p originals
+playops listings images download --snapshot snapshot.json --locale en-US \
+  --type phoneScreenshots --out originals/en-US --confirm
+```
+
+If you do not have original assets yet, capture an inventory with a metadata-only
+manifest; `preserve` needs no local image files:
+
+```yaml
+app: com.example.app
+profile: default
+track: internal
+images:
+  - locale: en-US
+    type: phoneScreenshots
+    mode: preserve
+```
+
+Save that as `inventory.yaml`, then run
+`playops releases snapshot --manifest inventory.yaml --out snapshot.json --confirm`.
+Add one preserve group for every locale/type you need. After successful downloads,
+`releases init --dir release --source-dir originals --track internal --out release.yaml`
+can prepare positional replacements. Capture a new snapshot from that release
+manifest before planning, to cover all intended release resources.
+
+Capture the snapshot with a manifest containing the required image groups first.
+Download fetches current image URLs through a temporary edit, checks hash/order
+against that snapshot, and waits for acknowledged edit deletion before fetching
+assets. Alternatively provide a caller-owned `--edit-id`; that edit is not deleted.
+The output directory must not exist and its parent must exist. Files are named
+`01-original.png` (or `.jpg`) in snapshot order and can be used with init's
+`--source-dir originals`. No existing files are overwritten.
+
+Each downloaded file must match the snapshot SHA-256 exactly. Preview URLs do
+not guarantee original bytes: `IMAGE_ORIGINAL_UNAVAILABLE` (exit 4) means the
+preview differs and your saved originals are still needed. The CLI does not
+modify URL variants, resize images, re-encode bytes or accept a near match.
+No partial output directory is left on failure. Inheritance cannot be downloaded
+from an empty image group. Downloads are bounded at 32 MiB per image and use
+anonymous HTTPS requests on Google image hosts, including redirect checks; API
+credentials are never sent to image URLs.
+
+Full snapshot and image list/download output includes `editId`, `editOpened`,
+`discarded` and `committed`. `discarded: true` means Google's delete request
+succeeded. For caller-owned edits, `editOpened` and `discarded` are false and the
+caller retains ownership. Inspection errors retain cleanup evidence in details.
+Creating and discarding an edit is an API mutation, even though no release
+content is uploaded or committed. It can invalidate another edit by the same
+identity. No-edit commands do not create or discard an edit.

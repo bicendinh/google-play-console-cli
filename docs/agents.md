@@ -127,3 +127,11 @@ set needs explicit `allowImageCountDecrease: true` in each affected image group,
 including copied destinations. Do not add that consent automatically to bypass
 `IMAGE_COUNT_DECREASE`; inspect the before/after image sets with the owner first.
 Use `sourceFiles`/`replace` when keeping other slots unchanged.
+
+To recover missing original images, use `listings images download --snapshot
+snapshot.json --locale en-US --type phoneScreenshots --out originals/en-US
+--confirm`, with an existing parent directory and a fresh output directory.
+Every file must match the snapshot SHA-256. A preview hash mismatch is
+`IMAGE_ORIGINAL_UNAVAILABLE`; request saved originals instead of bypassing it.
+Review `editOpened`/`discarded`/`editId` in snapshot and image inspection results.
+Temporary edits are API mutations, even when no content is uploaded or committed.

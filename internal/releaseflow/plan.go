@@ -60,9 +60,13 @@ func listingLocales(m Manifest) []string {
 	return locales
 }
 func (s Service) Capture(ctx context.Context, m Manifest) (Snapshot, error) {
-	var snapshot Snapshot
-	_, err := publisher.Transaction(ctx, s.API, m.App, nil, func(id string) error { var e error; snapshot, e = s.captureInEdit(ctx, m, id); return e })
+	snapshot, _, err := s.CaptureWithReceipt(ctx, m)
 	return snapshot, err
+}
+func (s Service) CaptureWithReceipt(ctx context.Context, m Manifest) (Snapshot, publisher.EditReceipt, error) {
+	var snapshot Snapshot
+	receipt, err := publisher.Inspect(ctx, s.API, m.App, func(id string) error { var e error; snapshot, e = s.captureInEdit(ctx, m, id); return e })
+	return snapshot, receipt, err
 }
 func (s Service) captureInEdit(ctx context.Context, m Manifest, id string) (Snapshot, error) {
 	snap := Snapshot{FormatVersion: 1, App: m.App, Profile: m.Profile, Listings: map[string]*Listing{}, Images: map[string][]Image{}}

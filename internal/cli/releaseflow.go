@@ -70,14 +70,14 @@ func (a *App) releaseSnapshot() *cobra.Command {
 			return model.Result{}, err
 		}
 		defer unlock()
-		snapshot, err := (releaseflow.Service{API: client, Now: a.Now}).Capture(ctx, m)
+		snapshot, receipt, err := (releaseflow.Service{API: client, Now: a.Now}).CaptureWithReceipt(ctx, m)
 		if err != nil {
 			return model.Result{}, err
 		}
 		if err = releaseflow.Write(out, snapshot); err != nil {
 			return model.Result{}, err
 		}
-		return model.Result{Data: snapshot, Meta: map[string]any{"source": "android-publisher", "out": out, "committed": false}}, nil
+		return model.Result{Data: snapshot, Meta: map[string]any{"source": "android-publisher", "out": out, "committed": false, "editOpened": receipt.EditOpened, "discarded": receipt.Discarded, "editId": receipt.EditID}}, nil
 	})
 	return c
 }
